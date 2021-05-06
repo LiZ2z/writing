@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link href="https://cdn.bootcdn.net/ajax/libs/twitter-bootstrap/1.4.0/css/bootstrap.css" rel="stylesheet">
+
+    <script>
+        function bodyOnload() {
+            console.log('bodyload')
+        }
+    </script>
+</head>
+
+    <span>abc</span>
+
+<body onload="bodyOnload()">
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function contentLoaded(){
+            console.log('DOM fully loaded and parsed'); // 译者注："DOM完全加载以及解析"
+            console.log(window.getComputedStyle(document.body, null)['color'])
+        });
+
+        window.addEventListener('load', function windowLoad() {
+            console.log('load')
+            console.log(window.getComputedStyle(document.body, null)['color'])
+        })
+
+        window.addEventListener('pageshow',function pageShow() {
+            console.log('pageShow')
+        })
+    </script>
+
+<script src="https://cdn.bootcdn.net/ajax/libs/echarts/2.1.10/echarts-all.js" ></script>
+
+    <script>
+        console.log('end');
+        console.log(window.getComputedStyle(document.body, null)['color'])
+    </script>
+</body>
+
+</html>

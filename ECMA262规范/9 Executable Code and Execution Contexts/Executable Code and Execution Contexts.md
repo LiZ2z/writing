@@ -1,0 +1,196 @@
+# Executable Code and Execution Contexts
+
+## 1. Environment Records（环境记录）
+
+`Environment Record`是一种`specification type`（规范类型，用于 javascript 引擎实现），它基于ECMAScript 代码的嵌套词法结构定义标识符(名字)与特定变量和函数的关联（应该就是保存变量名与变量的对应关系）。
+
+通常，`Environment Record`与 ECMAScript 代码的某些特定语法结构相关联，如 `FunctionDeclaration`、`BlockStatement` 或 `TryStatement 的 Catch 子句`。**每次执行此类代码时，都会创建一个新的`Environment Record`，以记录由这些代码创建的标识符绑定（保存变量名与变量的对应关系）**。
+
+> 由上可知，环境记录是基于代码词法结构用于保存标志符与变量及函数对应关系并具有增删改查功能的数据结构。
+
+每一个`Environment Record`都有一个`[[OuterEnv]]`字段，该字段要么为`null`，要么是对外部`Environment Record`的引用。这是一种对嵌套的`Environment Record`结构的值的建模（总之就是通过一种链表的方式去建模这种嵌套的`Environment Record`，链表的末端应该为`null`）。内部`Environment Record`所引用的外部`Environment Record`，逻辑上应该包裹着当前`Environment Record`（词法结构上包裹住？）。外部的`Environment Record`当然也可以有它自己的外部`Environment Record`。一个`Environment Record`可以是其他多个（内部的）`Environment Record`的外部`Environment Record`引用。例如：一个函数声明内部可以嵌套其他多个函数声明（白话：一个函数体内部声明其他多个函数）。
+
+```
+|-------------------------------------
+| 函数A（outer Environment Record）  
+| 
+| |--------------
+| | 函数B（inner Environment Record） 
+| | [[OuterEnv]]: 函数A的Environment Record
+| |--------------
+|
+| |--------------
+| | 函数C（inner Environment Record）
+| | [[OuterEnv]]: 函数A的Environment Record
+| |--------------
+|-------------------------------------
+```
+
+`Environment Record`纯粹是属于规范机制，由各个JavaScript引擎自己实现。JavaScript使用者也是无法访问到其中任何数据的。
+
+### 1.1 The Environment Record Type Hierarchy
+
+`Environment Record`可以用「面向对象的层次结构」进行类比，`Environment Record`是一个抽象类，它有三个具体的子类： [declarative Environment Record](https://tc39.es/ecma262/#sec-declarative-environment-records), [object Environment Record](https://tc39.es/ecma262/#sec-object-environment-records), and [global Environment Record](https://tc39.es/ecma262/#sec-global-environment-records)。`declarative Environment Record`又有`Function Environment Records`及`module Environment Records`两个子类。
+
+- `Environment Record`（抽象类）
+
+  -  `declarative Envrionment Record`用于定义「ECMAScript语言语法元素（syntactic elements）」（例如FunctionDeclarations，VariableDeclarations和Catch子句）的效果，这些元素直接将标识符绑定与ECMAScript语言值相关联。
+    - `Function Environment Record`对应「ECMA函数对象」的调用，它包含了这个函数体内部**顶层**的「声明绑定」。它可能会建立一个新的「this」绑定。 它还会捕获用于「super」调用所必需的状态。
+    - `module Environment Record`包含了模块**顶层**的「声明绑定」。它还包含了由显式的「模块导入语法」产生的「绑定」。`module Environment Record`的`[[OuterEnv]]`指向`global Environment Record`，即其外层环境记录为`global Environment Record`。
+
+  - `object Environment Record` 用于定义ECMAScript元素（例如WithStatement）的效果，这些元素将标识符绑定与某些对象的属性相关联。
+  - `global Environment Record`用于记录「脚本」的全局声明。它是顶层的「环境记录」；其`[[OuterEnv]]`的值为`null`。它可能预先填充了「标识符绑定」，并且包括一个关联的「全局对象」（window for browser; global for nodejs），该对象的属性提供了某些全局环境的标识符绑定。当「ECMA代码」执行的时候，一些「附加属性」可能被添加到这个全局对象上，全局对象上已存在的某些属性也可能被修改。
+
+下表定义了`Environment Record`抽象类所包含的抽象「规范方法（ECMA规范中的方法）」。这些抽象方法根据具体的子类有各自的具体算法实现。
+
+| method                         | Purpose                                                      |
+| ------------------------------ | ------------------------------------------------------------ |
+| `HasBinding(N)`                | 检测一个`Environment Record`中是否有对 _N(String value)_的绑定。是则返回`true`，否则返回`false` |
+| `CreateMutableBinding(N, D)`   | 在`Environment Record`中创建一个新的但是**_未初始化的_**、**_可变的_**「绑定」。**_N(String value)_**为这个绑定的名字。如果**_D(Boolean value)_**值为`true`，则这个绑定在之后可以被删除。 |
+| `CreateImmutableBinding(N, S)` | 在`Environment Record`中创建一个新的但是**_未初始化的_**、**_不可变的_**「绑定」。**_N(String value)_**为这个绑定的名字。如果**_S(Boolean value)_**值为`true`，那么任何在初始化后尝试对其进行设置的操作都将抛出一个「异常（报错）」，不论是否处于严格模式（regardless of the strict mode setting of operations that reference that binding.）。 |
+| `InitializeBinding(N, V)`      | 给一个在`Environment Record`中**_已存在但尚未初始化的「绑定」_**设置值。**_N(String value)_**为这个绑定的名字。**V（任何ECMA语言类型）**是给这个绑定设置的值。 |
+| `SetMutableBinding(N, V, S)`   | 给一个在`Environment Record`中**_已存在的可变「绑定」_**设置值。**_N(String value)_**为这个绑定的名字。**V（任何ECMA语言类型）**是给这个绑定设置的值。**_S_**是一个flag（表示严格模式？）。如果S的值为`true`且绑定不允许被设置，则抛出一个`TypeError`异常。 |
+| `GetBindingValue(N, S)`        | 返回`Environment Record`中已存在的绑定的值。**_N(String value)_**为这个绑定的名字。**_S_**代表严格模式。如果S值为`true`，且绑定不存在，则抛出__`ReferenceError`__。如果绑定存在，但是还未初始化，则不管S的值是什么，都抛出__`ReferenceError`__。 |
+| `DeleteBinding(N)`             | 从`Environment Record`中删除绑定。如果绑定存在，则移除，并返回`true`。如果绑定存在，但不能移除，返回false。如果绑定不存在，返回`true`。 |
+| `HasThisBinding()`             | 检查`Environment Record`是否建立了`this`绑定。返回boolean。  |
+| `HasSuperBinding()`            | 检查`Environment Record`是否建立了`super`方法绑定。返回boolean。 |
+| `WithBaseObject()`             | 如果`Environment Record`与 with语句相关联，返回这个with object， 否则返回undefined。 |
+
+> 从上表大概可知：`let a = 1;`实际有两步操作。第一步，创建一个名字为`a`的未初始化的可变绑定；第二步，将绑定`a`的值设置为`1`。
+
+#### 1.1.1 Declarative Environment Records
+
+每个` Declarative Environment Records`都与ECMAScript程序（词法？）作用域相关联，ECMAScript程序（词法？）作用域包含了variable、constant、let、class、module、import、函数声明。` Declarative Environment Records`绑定由其范围内包含的声明定义的标识符集。
+
+declarative Environment Records的具象的「规范方法」的行为如下：
+
+##### 1.1.1.1 HasBinding(N:String)
+
+没啥说的
+
+##### 1.1.1.2 CreateMutableBinding(N:String, D:Boolean)
+
+在当前Environment Record中创建一个未初始化的可变绑定N。当前Environment Record中必须不能已经存在绑定N（断言N不存在，否则报错）。如果D为true，则这个绑定N被标记为可被DeleteBinding(N)调用删除。
+
+```
+1. Assert: envRec does not already have a binding for N.
+2. Create a mutable binding in envRec for N and record that it is uninitialized. If D is true, record that the newly created binding may be deleted by a subsequent DeleteBinding call.
+3. Return NormalCompletion(empty).
+```
+
+##### 1.1.1.3 CreateImmutableBinding ( N:String, S:Boolean )
+
+在当前Environment Record中创建一个未初始化的不可变绑定N。当前Environment Record中必须不能已经存在绑定N（断言N不存在，否则报错）。如果S为true，则这个绑定N被标记为strict binding。
+
+```
+1. Assert: envRec does not already have a binding for N.
+2. Create an immutable binding in envRec for N and record that it is uninitialized. If S is true, record that the newly created binding is a strict binding.
+3. Return NormalCompletion(empty).
+```
+
+##### 1.1.1.4 InitializeBinding ( N:String, V:ECMAScript language value )
+
+将当前Environment Record中的未初始化的绑定N的值设置为（初始化）V。未初始化的绑定N必须已经存在于Environment Record中（断言未初始化的绑定N存在，否则报错）。
+
+```
+1. Assert: envRec must have an uninitialized binding for N.
+2. Set the bound value for N in envRec to V.
+3. Record that the binding for N in envRec has been initialized.
+4. Return NormalCompletion(empty).
+```
+
+##### 1.1.1.5[ SetMutableBinding ( N:String, V:ECMAScript language value , S:Boolean )](https://tc39.es/ecma262/#sec-declarative-environment-records-setmutablebinding-n-v-s)
+
+该方法试图将当前Environment Record中的绑定N的值设置为V。绑定N通常已存在，但有很少的几率不存在。如果S的值为true，且绑定N是不可变绑定，则抛出TypeError。
+
+> NOTE  An example of ECMAScript code that results in a missing binding at step [1](https://tc39.es/ecma262/#step-setmutablebinding-missing-binding) is:
+>
+> ```javascript
+> function f() { eval("var x; x = (delete x, 0);"); }
+> ```
+
+```
+1. If envRec does not have a binding for N, then
+		a. If S is true, throw a ReferenceError exception.
+		b. Perform envRec.CreateMutableBinding(N, true).
+		c. Perform envRec.InitializeBinding(N, V).
+		d. Return NormalCompletion(empty).
+2. If the binding for N in envRec is a strict binding, set S to true.
+3. If the binding for N in envRec has not yet been initialized, throw a ReferenceError exception.
+4. Else if the binding for N in envRec is a mutable binding, change its bound value to V.
+5. Else,
+		a. Assert: This is an attempt to change the value of an immutable binding.
+		b. If S is true, throw a TypeError exception.
+6. Return NormalCompletion(empty).
+```
+
+##### 1.1.1.6 GetBindingValue ( N:String, S:Boolean )
+
+返回当前Environment Record中绑定N的值。如果N存在，但是未初始化，不管S的值是什么，都抛出ReferenceError。
+
+```
+1. Assert: envRec has a binding for N.
+2. If the binding for N in envRec is an uninitialized binding, throw a ReferenceError exception.
+3. Return the value currently bound to N in envRec.
+```
+
+##### 1.1.1.7 DeleteBinding ( N:String )
+
+从当前Environment Record中删除绑定N，但是只能删那些显式的被标记为可删除的绑定（见1.1.1.2 CreateMutableBinding）。
+
+```
+1. Assert: envRec has a binding for the name that is the value of N.
+2. If the binding for N in envRec cannot be deleted, return false.
+3. Remove the binding for N from envRec.
+4. Return true.
+```
+
+##### 1.1.1.8 HasThisBinding ( )
+
+> A regular [declarative Environment Record](https://tc39.es/ecma262/#sec-declarative-environment-records) (i.e., one that is neither a [function Environment Record](https://tc39.es/ecma262/#sec-function-environment-records) nor a [module Environment Record](https://tc39.es/ecma262/#sec-module-environment-records)) does not provide a `this` binding.
+
+常规的声明性环境记录（即既不是功能环境记录也不是模块环境记录的记录）不提供this绑定。
+
+```
+1. Return false.
+```
+
+##### 1.1.1.9 HasSuperBinding ( )
+
+同上。
+
+##### 1.1.1.10 WithBaseObject ( )
+
+```
+1. Return undefined.
+```
+
+#### 1.1.3 Function Environment Records
+
+Function Environment Records 属于 declarative Environment Record，用于表示函数的顶级作用域（喵？）。对于不是「箭头函数」的函数，将提供一个`this`绑定。如果一个函数不是箭头函数，且具有`super`引用，那么它的函数环境记录内还会包含用于从函数内部执行`super`方法调用的状态。
+
+
+
+### 1.2 Environment Record Operations
+
+#### 1.2.1  [GetIdentifierReference ( env, name, strict )](https://tc39.es/ecma262/#sec-getidentifierreference)
+
+定义标识符的查找规则。
+
+env (an Environment Record or null), name (a String), and strict (a Boolean)
+
+```
+1. If env is the value null, then
+		a. Return the Reference Record { [[Base]]: unresolvable, [[ReferencedName]]: name, [[Strict]]: strict, [[ThisValue]]: empty }.
+2. Let exists be ? env.HasBinding(name).
+3. If exists is true, then
+		a. Return the Reference Record { [[Base]]: env, [[ReferencedName]]: name, [[Strict]]: strict, [[ThisValue]]: empty }.
+4. Else,
+		a. Let outer be env.[[OuterEnv]].
+		b. Return ? GetIdentifierReference(outer, name, strict).
+
+```
+
+
+
+### 
