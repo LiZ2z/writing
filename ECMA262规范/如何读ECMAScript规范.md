@@ -28,11 +28,10 @@ ECMAScript specification 是所有「Javascript实现（名词。例如：浏览
 - [§11 ECMAScript Language: Source Code](https://tc39.es/ecma262/#sec-ecmascript-language-source-code)  ～ [§16 ECMAScript Language: Scripts and Modules](https://tc39.es/ecma262/#sec-ecmascript-language-scripts-and-modules) 
 
   - 语法定义。i.e. 如何写一个 `for`-`in` 循环？
-
   - 静态语义。i.e. 在一个变量声明语句中，哪个部分是变量名？
-
   - 运行时语义。i.e.  `for`-`in` 循环是怎么执行的？
-
+  - 箭头函数this指向。[14.2 Arrow Function Definitions](https://262.ecma-international.org/11.0/#sec-arrow-function-definitions-runtime-semantics-evaluation)
+  
 - [§19 The Global Object](https://tc39.es/ecma262/#sec-global-object) ～ [§28 Reflection](https://tc39.es/ecma262/#sec-reflection)
 
   ​	APIs。i.e.  `String.prototype.substring()`方法做了什么？
